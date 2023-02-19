@@ -174,7 +174,7 @@ def train_model(model, criterion, optimizer, num_epoches=25):
               FirstFrame_exercise=fv_filenameFirst.split('/')[5]
               LastFrame_exercise=fv_filenameLast.split('/')[5]
 
-              if (len(k) == sequence_length) and (FirstFrame_exercise == LastFrame_exercise): and (int(LastFrame) > int(FirstFrame)):
+              if (len(k) == sequence_length) and (FirstFrame_exercise == LastFrame_exercise) and (int(LastFrame) > int(FirstFrame)):
                 inputs = extractor.get_vec(inputs)
                
                 inputs = inputs.reshape(-1, sequence_length, input_size).to(device)

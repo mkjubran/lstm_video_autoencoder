@@ -30,7 +30,7 @@ data_transforms = {
     ]),
 }
 
-data_dir = '../Kinetics/kinetics-dataset/k400images'
+data_dir = '../Kinetics/kinetics-dataset/k400imagesRes50'
 image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x), data_transforms[x]) for x in ['train', 'val']}
 data_loaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=16, shuffle=True, num_workers=16)
                 for x in ['train', 'val']}

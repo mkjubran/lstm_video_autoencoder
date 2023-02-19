@@ -15,7 +15,7 @@ from tqdm import tqdm
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 #Hyper parameters
-sequence_length = 32
+sequence_length = 64
 input_size = 2048
 hidden_size = 32 #32#64#1024
 num_layers = 2
@@ -164,7 +164,7 @@ def train_model(model, criterion, optimizer, num_epoches=25):
             #for inputs, _, paths in data_loaders[phase]:
 
             for counter,[inputs,k] in enumerate(tqdm(data_loaders[phase])):
-
+              #pdb.set_trace()
               fv_filename=[item[0] for item in data_loaders[phase].dataset.samples[counter*sequence_length:(counter+1)*sequence_length]]
               FirstFrame=fv_filename[0].split('/')[6].split('.')[0].split('e')[-1]
               LastFrame=fv_filename[-1].split('/')[6].split('.')[0].split('e')[-1]

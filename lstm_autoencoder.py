@@ -10,12 +10,13 @@ from PIL import Image
 from resnet_feature_extracter import Img2Vec
 import pdb
 from tqdm import tqdm
+from torchvision import models
 
 #Device configuration
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 #Hyper parameters
-sequence_length = 64
+sequence_length = 32
 input_size = 2048
 hidden_size = 32 #32#64#1024
 num_layers = 2
@@ -25,7 +26,6 @@ learning_rate = 0.01
 
 #Feature vector extractor
 extractor = Img2Vec()
-
 
 #Antoencoder definition
 class EncoderRNN(nn.Module):
@@ -165,13 +165,16 @@ def train_model(model, criterion, optimizer, num_epoches=25):
 
             for counter,[inputs,k] in enumerate(tqdm(data_loaders[phase])):
               #pdb.set_trace()
-              fv_filename=[item[0] for item in data_loaders[phase].dataset.samples[counter*sequence_length:(counter+1)*sequence_length]]
-              FirstFrame=fv_filename[0].split('/')[6].split('.')[0].split('e')[-1]
-              LastFrame=fv_filename[-1].split('/')[6].split('.')[0].split('e')[-1]
-              FirstFrame_exercise=fv_filename[0].split('/')[5]
-              LastFrame_exercise=fv_filename[-1].split('/')[5]
+              #fv_filename=[item[0] for item in data_loaders[phase].dataset.samples[counter*sequence_length:(counter+1)*sequence_length]]
+              fv_filenameFirst=data_loaders[phase].dataset.samples[counter*sequence_length][0]
+              fv_filenameLast=data_loaders[phase].dataset.samples[(counter+1)*sequence_length][0]
 
-              if (len(k) == sequence_length) and (FirstFrame_exercise == LastFrame_exercise) and (int(LastFrame) > int(FirstFrame)):
+              FirstFrame=fv_filenameFirst.split('/')[6].split('.')[0].split('e')[-1]
+              LastFrame=fv_filenameLast.split('/')[6].split('.')[0].split('e')[-1]
+              FirstFrame_exercise=fv_filenameFirst.split('/')[5]
+              LastFrame_exercise=fv_filenameLast.split('/')[5]
+
+              if (len(k) == sequence_length) and (FirstFrame_exercise == LastFrame_exercise): and (int(LastFrame) > int(FirstFrame)):
                 inputs = extractor.get_vec(inputs)
                
                 inputs = inputs.reshape(-1, sequence_length, input_size).to(device)
@@ -199,7 +202,8 @@ def train_model(model, criterion, optimizer, num_epoches=25):
             if phase == 'val' and epoch_loss < best_loss:
                 best_loss = epoch_loss
                 best_model_wts = copy.deepcopy(model.state_dict())
-        
+                torch.save(model.state_dict(), './lstm_autoencoder_model.pt')
+
         #print()
 
     time_elapsed = time.time() - since

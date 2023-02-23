@@ -16,7 +16,7 @@ from torchvision import models
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 #Hyper parameters
-sequence_length = 32
+sequence_length = 64
 input_size = 2048
 hidden_size = 32 #32#64#1024
 num_layers = 2
@@ -91,7 +91,7 @@ class AutoEncoderRNN(nn.Module):
     def forward(self, x):
         encoded_x = self.encoder(x).expand(-1, sequence_length, -1)
         decoded_x = self.decoder(encoded_x)
-
+        #pdb.set_trace()
         return decoded_x
 
 
@@ -161,27 +161,28 @@ def train_model(model, criterion, optimizer, num_epoches=25):
                
                 inputs = torch.stack(imgs)
             '''
-            #for inputs, _, paths in data_loaders[phase]:
-
+            #for inputs, k in data_loaders[phase]:
             for counter,[inputs,k] in enumerate(tqdm(data_loaders[phase])):
-              #pdb.set_trace()
-              #fv_filename=[item[0] for item in data_loaders[phase].dataset.samples[counter*sequence_length:(counter+1)*sequence_length]]
-              fv_filenameFirst=data_loaders[phase].dataset.samples[counter*sequence_length][0]
-              fv_filenameLast=data_loaders[phase].dataset.samples[(counter+1)*sequence_length][0]
+             if (counter+1)*sequence_length <= len(data_loaders[phase].dataset.samples):
+                #fv_filename=[item[0] for item in data_loaders[phase].dataset.samples[counter*sequence_length:(counter+1)*sequence_length]]
+                fv_filenameFirst=data_loaders[phase].dataset.samples[counter*sequence_length][0]
+                fv_filenameLast=data_loaders[phase].dataset.samples[(counter+1)*sequence_length][0]
 
-              FirstFrame=fv_filenameFirst.split('/')[6].split('.')[0].split('e')[-1]
-              LastFrame=fv_filenameLast.split('/')[6].split('.')[0].split('e')[-1]
-              FirstFrame_exercise=fv_filenameFirst.split('/')[5]
-              LastFrame_exercise=fv_filenameLast.split('/')[5]
+                #pdb.set_trace()
 
-              if (len(k) == sequence_length) and (FirstFrame_exercise == LastFrame_exercise) and (int(LastFrame) > int(FirstFrame)):
-                inputs = extractor.get_vec(inputs)
+                FirstFrame=fv_filenameFirst.split('/')[6].split('.')[0].split('e')[-1]
+                LastFrame=fv_filenameLast.split('/')[6].split('.')[0].split('e')[-1]
+                FirstFrame_exercise=fv_filenameFirst.split('/')[5]
+                LastFrame_exercise=fv_filenameLast.split('/')[5]
+              
+                if (len(k) == sequence_length) and (FirstFrame_exercise == LastFrame_exercise) and (int(LastFrame) > int(FirstFrame)):
+                  inputs = extractor.get_vec(inputs)
                
-                inputs = inputs.reshape(-1, sequence_length, input_size).to(device)
+                  inputs = inputs.reshape(-1, sequence_length, input_size).to(device)
 
-                optimizer.zero_grad()
+                  optimizer.zero_grad()
 
-                with torch.set_grad_enabled(phase != 'val'):
+                  with torch.set_grad_enabled(phase != 'val'):
                     outputs = model(inputs)
 
                     inv_idx = torch.arange(sequence_length - 1, -1, -1).long()
@@ -191,7 +192,8 @@ def train_model(model, criterion, optimizer, num_epoches=25):
                         loss.backward()
                         optimizer.step()
 
-                running_loss += loss.item() * inputs.size(0)
+                  running_loss += loss.item() * inputs.size(0)
+              
 
             epoch_loss = running_loss / dataset_sizes[phase]
             

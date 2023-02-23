@@ -10,9 +10,11 @@ from PIL import Image
 from resnet_feature_extracter import Img2Vec
 import pdb
 from tqdm import tqdm
+from torchvision import models
+import json
 
 #Device configuration
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 #Hyper parameters
 sequence_length = 32
@@ -23,9 +25,12 @@ batch_size = sequence_length # set to the number of images of a seqence # 36
 num_epoches = 100#250
 learning_rate = 0.01
 
+#Name of file to write the compressed seq. 
+File_To_Write="Compressed_Seq.json"
+Compressed_json={}
+
 #Feature vector extractor
 extractor = Img2Vec()
-
 
 #Antoencoder definition
 class EncoderRNN(nn.Module):
@@ -92,7 +97,7 @@ class AutoEncoderRNN(nn.Module):
         encoded_x = self.encoder(x).expand(-1, sequence_length, -1)
         decoded_x = self.decoder(encoded_x)
 
-        return encoded_x,decoded_x
+        return encoded_x, decoded_x
 
 
 #Data preparation
@@ -136,37 +141,72 @@ def train_model(model, criterion, optimizer, num_epoches=25):
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = 100
 
-    for epoch in range(1):
+    #for epoch in range(num_epoches):
+    epoch=0
+    if True:
         print('Epoch {} / {}'.format(epoch + 1, num_epoches))
         print('-' * 10)
 
-        for phase in ['train']:
+        for phase in ['train', 'val']:
+        #for phase in ['all']:
+            #if phase == 'val':
+                # scheduler.step()
             model.eval()
+            #else:
+            #    model.train()
+
             running_loss = 0.0
             
-            for counter,[inputs,k] in enumerate(tqdm(data_loaders[phase])):
-              fv_filename=[item[0] for item in data_loaders['train'].dataset.samples[counter*sequence_length:(counter+1)*sequence_length]]
-              FirstFrame=fv_filename[0].split('/')[6].split('.')[0].split('e')[-1]
-              LastFrame=fv_filename[-1].split('/')[6].split('.')[0].split('e')[-1]
-              FirstFrame_exercise=fv_filename[0].split('/')[5]
-              LastFrame_exercise=fv_filename[-1].split('/')[5]
-
-              if (len(k) == sequence_length) and (FirstFrame_exercise == LastFrame_exercise) and (int(LastFrame) > int(FirstFrame)):
-                print(f"{FirstFrame_exercise}:{FirstFrame}-{LastFrame}")               
-                inputs = extractor.get_vec(inputs)
+            # sequence input
+            '''
+            for i in range(dataset_sizes['train'] - batch_size):  
+                imgs = []
+                for ii in range(i, i + batch_size):
+                    path = os.path.join('{}{}.jpg'.format('./pregnant/all/pregnant/', ii)) 
+                    img = data_transforms(Image.open(path))
+                    imgs.append(img)
                
-                inputs = inputs.reshape(-1, sequence_length, input_size).to(device)
+                inputs = torch.stack(imgs)
+            '''
+            #for inputs, k in data_loaders[phase]:
+            for counter,[inputs,k] in enumerate(tqdm(data_loaders[phase])):
+             if (counter+1)*sequence_length <= len(data_loaders[phase].dataset.samples):
+                #fv_filename=[item[0] for item in data_loaders[phase].dataset.samples[counter*sequence_length:(counter+1)*sequence_length]]
+                fv_filenameFirst=data_loaders[phase].dataset.samples[counter*sequence_length][0]
+                fv_filenameLast=data_loaders[phase].dataset.samples[(counter+1)*sequence_length][0]
 
-                optimizer.zero_grad()
+                #pdb.set_trace()
 
-                torch.set_grad_enabled(False)
-                encoutputs,outputs = model(inputs)
+                FirstFrame=fv_filenameFirst.split('/')[6].split('.')[0].split('e')[-1]
+                LastFrame=fv_filenameLast.split('/')[6].split('.')[0].split('e')[-1]
+                FirstFrame_exercise=fv_filenameFirst.split('/')[5]
+                LastFrame_exercise=fv_filenameLast.split('/')[5]
+              
+                if (len(k) == sequence_length) and (FirstFrame_exercise == LastFrame_exercise) and (int(LastFrame) > int(FirstFrame)):
+                  inputs = extractor.get_vec(inputs)
+               
+                  inputs = inputs.reshape(-1, sequence_length, input_size).to(device)
 
-                inv_idx = torch.arange(sequence_length - 1, -1, -1).long()
-                loss = criterion(outputs, inputs[:, inv_idx, :])
+                  optimizer.zero_grad()
 
-                running_loss += loss.item() * inputs.size(0)
+                  with torch.set_grad_enabled(False): #phase != 'val'):
+                    encoded_x, outputs = model(inputs)
 
+                    inv_idx = torch.arange(sequence_length - 1, -1, -1).long()
+                    #loss = criterion(outputs, inputs[:, inv_idx, :])
+
+                    #if phase != 'val':
+                    #    loss.backward()
+                    #    optimizer.step()
+
+                    key=f"{fv_filenameFirst.split('/')[-2]}_{FirstFrame}_{LastFrame}"
+                    Compressed_json[key]=encoded_x[0].reshape(sequence_length*hidden_size).cpu().numpy().tolist()
+                    with open(File_To_Write, 'w', encoding='utf-8') as f:
+                         json.dump(Compressed_json, f, ensure_ascii=False, indent=4)
+
+                  #running_loss += loss.item() * inputs.size(0)
+              
+            '''
             epoch_loss = running_loss / dataset_sizes[phase]
             
             losses[phase].append(epoch_loss)
@@ -176,24 +216,31 @@ def train_model(model, criterion, optimizer, num_epoches=25):
             if phase == 'val' and epoch_loss < best_loss:
                 best_loss = epoch_loss
                 best_model_wts = copy.deepcopy(model.state_dict())
-        
+                torch.save(model.state_dict(), './lstm_autoencoder_model.pt')
+            '''
         #print()
+
+    #with open(File_To_Write, encoding='utf-8') as fh:
+    #     data = json.load(fh)
+    #pdb.set_trace()
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     print('Best val loss: {:4f}'.format(best_loss))
 
-    model.load_state_dict(best_model_wts)
-    return model, losses
-
+    #model.load_state_dict(best_model_wts)
+    return #model , losses
 
 
 model = AutoEncoderRNN(input_size, hidden_size, num_layers)
-model.load_state_dict(torch.load('./lstm_autoencoder_model.pt'))
-model = model.to(device)
+model.load_state_dict(torch.load('./lstm_autoencoder_model_SL32_HS32.pt'))
 
+model = model.to(device)
 criterion = nn.MSELoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+train_model(model, criterion, optimizer, num_epoches)
 
-model, losses = train_model(model, criterion, optimizer, num_epoches)
+#model, losses = train_model(model, criterion, optimizer, num_epoches)
+#torch.save(model.state_dict(), './lstm_autoencoder_model.pt')
+
 
